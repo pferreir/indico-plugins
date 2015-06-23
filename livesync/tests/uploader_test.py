@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Indico; if not, see <http://www.gnu.org/licenses/>.
 
+import pytest
 from mock import MagicMock
 
 from indico_livesync.models.queue import LiveSyncQueueEntry, ChangeType
@@ -44,15 +45,22 @@ class FailingUploader(RecordingUploader):
             raise Exception('All your data are belong to us!')
 
 
+@pytest.fixture(autouse=True)
+def mock_resolved_zodb_objects(mocker):
+        mocker.patch.object(LiveSyncQueueEntry, 'object', autospec=True)
+
+
 def test_run_initial(mocker):
     """Test the initial upload"""
     mocker.patch.object(Uploader, 'processed_records', autospec=True)
     uploader = RecordingUploader(MagicMock())
     uploader.INITIAL_BATCH_SIZE = 3
-    events = tuple(range(4))
-    uploader.run_initial(events)
+    records = tuple(LiveSyncQueueEntry(change=ChangeType.created, type='event', event_id=evt_id)
+                    for evt_id in xrange(4))
+    uploader.run_initial(records)
     # We expect two batches, with the second one being smaller (i.e. no None padding, just the events)
-    batches = events[:3], events[3:]
+    refs = tuple(record.object_ref for record in records)
+    batches = refs[:3], refs[3:]
     assert len(batches[0]) > len(batches[1])
     assert uploader._uploaded == [(batches[0], False), (batches[1], False)]
     # During an initial export there are no records to mark as processed
@@ -64,9 +72,11 @@ def test_run(mocker):
     db = mocker.patch('indico_livesync.uploader.db')
     uploader = RecordingUploader(MagicMock())
     uploader.BATCH_SIZE = 3
-    records = tuple(LiveSyncQueueEntry(change=ChangeType.created) for _ in xrange(4))
+    records = tuple(
+        LiveSyncQueueEntry(change=ChangeType.created, type='event', event_id=evt_id) for evt_id in xrange(4))
     uploader.run(records)
-    batches = records[:3], records[3:]
+    refs = tuple(record.object_ref for record in records)
+    batches = refs[:3], refs[3:]
     assert uploader._uploaded == [(batches[0], True), (batches[1], True)]
     # All records should be marked as processed
     assert all(record.processed for record in records)
@@ -79,11 +89,13 @@ def test_run_failing(mocker):
     db = mocker.patch('indico_livesync.uploader.db')
     uploader = FailingUploader(MagicMock())
     uploader.BATCH_SIZE = 3
-    records = tuple(LiveSyncQueueEntry(change=ChangeType.created) for _ in xrange(10))
+    records = tuple(
+        LiveSyncQueueEntry(change=ChangeType.created, type='event', event_id=evt_id) for evt_id in xrange(10))
     uploader.run(records)
+    refs = tuple(record.object_ref for record in records)
     assert uploader.logger.exception.called
     # No uploads should happen after a failed batch
-    assert uploader._uploaded == [(records[:3], True), (records[3:6], True)]
+    assert uploader._uploaded == [(refs[:3], True), (refs[3:6], True)]
     # Only successful records should be marked as processed
     assert all(record.processed for record in records[:3])
     assert not any(record.processed for record in records[3:])
@@ -102,7 +114,7 @@ def test_marcxml_run(mocker):
     assert not mxg.objects_to_xml.called
     assert uploader.upload_xml.called
     mxg.reset_mock()
-    uploader.run_initial([1])
+    uploader.run_initial([LiveSyncQueueEntry(change=ChangeType.created)])
     assert not mxg.records_to_xml.called
     assert mxg.objects_to_xml.called
     assert uploader.upload_xml.called
@@ -113,5 +125,5 @@ def test_marcxml_empty_result(mocker):
     mocker.patch('indico_livesync.uploader.MARCXMLGenerator.objects_to_xml', return_value=None)
     mocker.patch.object(MARCXMLUploader, 'upload_xml', autospec=True)
     uploader = MARCXMLUploader(MagicMock())
-    uploader.run_initial([1])
+    uploader.run_initial([LiveSyncQueueEntry(change=ChangeType.created)])
     assert not uploader.upload_xml.called
