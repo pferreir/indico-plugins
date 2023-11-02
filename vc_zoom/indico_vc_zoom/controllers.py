@@ -18,11 +18,14 @@ from werkzeug.exceptions import Forbidden, ServiceUnavailable
 
 from indico.core.db import db
 from indico.core.errors import UserValueError
+from indico.modules.events.controllers.display import RHDisplayEventBase
 from indico.modules.vc.controllers import RHVCSystemEventBase
 from indico.modules.vc.exceptions import VCRoomError, VCRoomNotFoundError
 from indico.modules.vc.models.vc_rooms import VCRoom, VCRoomStatus
 from indico.util.i18n import _
 from indico.web.rh import RH
+
+from indico_vc_zoom.api.client import ZoomIndicoClient
 
 
 class RHRoomAlternativeHost(RHVCSystemEventBase):
@@ -104,3 +107,9 @@ class RHWebhook(RH):
             vc_room.status = VCRoomStatus.deleted
         else:
             current_plugin.logger.warning('Unhandled Zoom webhook payload: %s', event)
+
+
+class RHZoomMeetingStatus(RHVCSystemEventBase):
+    def _process_GET(self):
+        client = ZoomIndicoClient()
+        return jsonify(client.get_meeting(self.vc_room.data['zoom_id']))

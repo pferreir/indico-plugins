@@ -8,6 +8,7 @@
 /* global confirmPrompt:false, $T:false */
 
 import {handleAxiosError, indicoAxios} from 'indico/utils/axios';
+import './ZoomConnectButton';
 
 const $t = $T.domain('vc_zoom');
 

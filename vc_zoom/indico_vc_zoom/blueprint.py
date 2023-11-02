@@ -7,7 +7,7 @@
 
 from indico.core.plugins import IndicoPluginBlueprint
 
-from indico_vc_zoom.controllers import RHRoomAlternativeHost, RHWebhook
+from indico_vc_zoom.controllers import RHRoomAlternativeHost, RHWebhook, RHZoomMeetingStatus
 
 
 blueprint = IndicoPluginBlueprint('vc_zoom', 'indico_vc_zoom')
@@ -22,3 +22,8 @@ blueprint.add_url_rule(
     methods=('POST',)
 )
 blueprint.add_url_rule('/api/plugin/zoom/webhook', 'webhook', RHWebhook, methods=('POST',))
+blueprint.add_url_rule(
+    '/event/<int:event_id>/videoconference/<any(zoom):service>/meeting-status/<int:event_vc_room_id>',
+    'meeting_status',
+    RHZoomMeetingStatus
+)

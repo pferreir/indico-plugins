@@ -1,0 +1,7 @@
+.button-group {
+  float: right;
+
+  > :global(.ui.button) {
+    margin-right: 2em;
+  }
+}
